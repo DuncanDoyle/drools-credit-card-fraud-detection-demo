@@ -1,0 +1,110 @@
+package org.jboss.ddoyle.rhsummit2014.bags;
+
+import com.redhat.demo.dm.ccfraud.domain.CreditCardTransaction;
+import java.util.Collection;
+import java.util.ArrayList;
+
+
+declare CreditCardTransaction
+    @role( event )
+    @timestamp( timestamp )    
+end
+
+declare PotentialFraudFact 
+	creditCardNumber: long
+	transactions: java.util.ArrayList
+end
+
+rule "CC-Transactions last 15 minutes"
+when 
+	accumulate ($cct: CreditCardTransaction() over window:time (15m) from entry-point Transactions;
+				$nrOfTransactions : count($cct), 
+				$list: collectList($cct);
+				$nrOfTransactions >= 4)
+	$c1: CreditCardTransaction() from $list
+	$c2: CreditCardTransaction(this != $c1, this after[0s, 10s] $c1) from $list				 
+then
+	System.out.println("\nFound 4 or more cc transactions in last 15 minutes of current transaction");
+	System.out.println("And within that collection, there are 2 transactions within 10 seconds of each other.\n");
+	PotentialFraudFact potentialFraud = new PotentialFraudFact();
+	potentialFraud.setTransactions(new java.util.ArrayList());
+	potentialFraud.setCreditCardNumber($c1.getCreditCardNumber());
+	potentialFraud.getTransactions().add($c1);
+	potentialFraud.getTransactions().add($c2);
+	insert(potentialFraud);
+end
+
+
+rule "Found potential fraud"
+when
+	exists PotentialFraudFact()
+then
+	System.out.println("\n!!!! Found a potential fraud!!!!\n");
+end
+
+
+/*
+rule "CC-Transactions last 15 minutes"
+when
+	//Get the latest CreditCardTransaction
+	$c: CreditCardTransaction($timestamp: timestamp)
+	not CreditCardTransaction(timestamp > $timestamp, this != $c)  
+	// Collect the transactions within 15 minutes of the last one of if there are more than 3 (total of 4 transactinos)
+	// 900000 is 15 minutes in ms.
+   	accumulate($cct: CreditCardTransaction(timestamp >= ($timestamp - 900000));
+   		$nrOfTransactions :count($cct),
+   		$list: collectList($cct);
+   		$nrOfTransactions >= 4)
+   	// And within that collection, determine if there are 2 transactions that are within 10 seconds of each other.
+   	$c1: CreditCardTransaction() from $list
+	$c2: CreditCardTransaction(this != $c1, (timestamp - $c1.timestamp) >= 0,  (timestamp - $c1.timestamp) <= 10000) from $list
+then
+	System.out.println("Accumulate!!!!");
+	System.out.println("Found 4 or more cc transactions in last 15 minutes of current transaction");
+	System.out.println("And within that collection, there are 2 transactions within 10 seconds of each other.");
+	System.out.println("Collection size: " + $list.size());
+end
+*/
+
+/*
+rule "CC-Transactions last 15 minutes with collect"
+when
+	//Get the latest CreditCardTransaction
+    $c: CreditCardTransaction($timestamp: timestamp)
+	not CreditCardTransaction(timestamp > $timestamp, this != $c)
+	$list: ArrayList(size >= 4) from collect(CreditCardTransaction(timestamp >= ($timestamp - 900000)))
+	$c1: CreditCardTransaction from $list
+	$c2: CreditCardTransaction(this !+ $c1, 0 <= (timestamp - $c1.timestamp) <= 10000) from $list
+then
+	System.out.println("Collect!!!!");
+    System.out.println("Found 4 or more cc transactions in last 15 minutes of current transaction");
+	System.out.println("Collection size: " + $list.size());
+end
+*/
+
+
+
+/*
+rule "CC-Transactions last 15 minutesw with temporal operators"
+when
+	$c: CreditCardTransaction($timestamp: timestamp)
+	not CreditCardTransaction(timestamp > $timestamp, this != $c)  
+	// 900000 is 15 minutes in ms.
+   accumulate($cct: CreditCardTransaction(timestamp  $timestamp));
+   		$nrOfTransactions :count($cct);
+   		$nrOfTransactions >= 4)
+then
+	System.out.println("Found 4 or more cc transactions in last 15 minutes of current transaction");
+end
+*/
+/*
+rule "Latest CC-Transaction"
+when
+	$c: CreditCardTransaction($timestamp: timestamp)
+	not CreditCardTransaction(timestamp > $timestamp, this != $c)  
+then
+	System.out.println("Last transaction: " + $c.getTransactionNumber());
+end
+*/
+
+
